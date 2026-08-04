@@ -1423,7 +1423,7 @@ uhdr_error_info_t JpegR::getJPEGRInfo(uhdr_compressed_image_t* uhdr_compressed_i
 }
 
 uhdr_error_info_t JpegR::parseGainMapMetadata(uint8_t* iso_data, size_t iso_size, uint8_t* xmp_data,
-                                              size_t xmp_size,
+                                              size_t xmp_size, uint8_t* exif_data, int exif_size,
                                               uhdr_gainmap_metadata_ext_t* uhdr_metadata) {
   if (iso_size > 0) {
     if (iso_size < kIsoNameSpace.size() + 1) {
@@ -1445,7 +1445,7 @@ uhdr_error_info_t JpegR::parseGainMapMetadata(uint8_t* iso_data, size_t iso_size
     UHDR_ERR_CHECK(uhdr_gainmap_metadata_frac::gainmapMetadataFractionToFloat(&decodedMetadata,
                                                                               uhdr_metadata));
   } else if (xmp_size > 0) {
-    UHDR_ERR_CHECK(getMetadataFromXMP(xmp_data, xmp_size, uhdr_metadata));
+    UHDR_ERR_CHECK(getMetadataFromXMP(xmp_data, xmp_size, exif_data, exif_size, uhdr_metadata));
   } else {
     uhdr_error_info_t status;
     status.error_code = UHDR_CODEC_INVALID_PARAM;
@@ -1488,10 +1488,11 @@ uhdr_error_info_t JpegR::decodeJPEGR(uhdr_compressed_image_t* uhdr_compressed_im
 
   uhdr_gainmap_metadata_ext_t uhdr_metadata;
   if (gainmap_metadata != nullptr || output_ct != UHDR_CT_SRGB) {
-    UHDR_ERR_CHECK(parseGainMapMetadata(static_cast<uint8_t*>(jpeg_dec_obj_gm.getIsoMetadataPtr()),
-                                        jpeg_dec_obj_gm.getIsoMetadataSize(),
-                                        static_cast<uint8_t*>(jpeg_dec_obj_gm.getXMPPtr()),
-                                        jpeg_dec_obj_gm.getXMPSize(), &uhdr_metadata))
+    UHDR_ERR_CHECK(parseGainMapMetadata(
+        static_cast<uint8_t*>(jpeg_dec_obj_gm.getIsoMetadataPtr()),
+        jpeg_dec_obj_gm.getIsoMetadataSize(), static_cast<uint8_t*>(jpeg_dec_obj_gm.getXMPPtr()),
+        jpeg_dec_obj_gm.getXMPSize(), static_cast<uint8_t*>(jpeg_dec_obj_sdr.getEXIFPtr()),
+        jpeg_dec_obj_sdr.getEXIFSize(), &uhdr_metadata))
     if (gainmap_metadata != nullptr) {
       std::copy(uhdr_metadata.min_content_boost, uhdr_metadata.min_content_boost + 3,
                 gainmap_metadata->min_content_boost);
@@ -1527,6 +1528,44 @@ uhdr_error_info_t JpegR::applyGainMap(uhdr_raw_image_t* sdr_intent, uhdr_raw_ima
                                       uhdr_color_transfer_t output_ct,
                                       [[maybe_unused]] uhdr_img_fmt_t output_format,
                                       float max_display_boost, uhdr_raw_image_t* dest) {
+  if (dest == nullptr || dest->planes[UHDR_PLANE_PACKED] == nullptr) {
+    uhdr_error_info_t status;
+    status.error_code = UHDR_CODEC_INVALID_PARAM;
+    status.has_detail = 1;
+    snprintf(status.detail, sizeof status.detail,
+             "apply gainmap method received nullptr for destination image or plane pointer");
+    return status;
+  }
+  if (dest->stride[UHDR_PLANE_PACKED] < dest->w) {
+    uhdr_error_info_t status;
+    status.error_code = UHDR_CODEC_INVALID_PARAM;
+    status.has_detail = 1;
+    snprintf(status.detail, sizeof status.detail,
+             "destination stride (%u) cannot be less than image width (%u)",
+             dest->stride[UHDR_PLANE_PACKED], dest->w);
+    return status;
+  }
+  if (output_ct != UHDR_CT_LINEAR && output_ct != UHDR_CT_HLG && output_ct != UHDR_CT_PQ) {
+    uhdr_error_info_t status;
+    status.error_code = UHDR_CODEC_INVALID_PARAM;
+    status.has_detail = 1;
+    snprintf(status.detail, sizeof status.detail,
+             "apply gainmap method expects output color transfer to be one of "
+             "{UHDR_CT_LINEAR, UHDR_CT_HLG, UHDR_CT_PQ}. Received %d",
+             output_ct);
+    return status;
+  }
+  if ((output_ct == UHDR_CT_LINEAR && dest->fmt != UHDR_IMG_FMT_64bppRGBAHalfFloat) ||
+      ((output_ct == UHDR_CT_HLG || output_ct == UHDR_CT_PQ) &&
+       dest->fmt != UHDR_IMG_FMT_32bppRGBA1010102)) {
+    uhdr_error_info_t status;
+    status.error_code = UHDR_CODEC_INVALID_PARAM;
+    status.has_detail = 1;
+    snprintf(status.detail, sizeof status.detail,
+             "unsupported destination pixel format %d for output color transfer %d",
+             dest->fmt, output_ct);
+    return status;
+  }
   if (gainmap_metadata->version.compare(kJpegrVersion)) {
     uhdr_error_info_t status;
     status.error_code = UHDR_CODEC_UNSUPPORTED_FEATURE;
@@ -1811,7 +1850,8 @@ uhdr_error_info_t JpegR::extractPrimaryImageAndGainMap(uhdr_compressed_image_t* 
     uhdr_error_info_t status;
     status.error_code = UHDR_CODEC_INVALID_PARAM;
     status.has_detail = 1;
-    snprintf(status.detail, sizeof status.detail, "input uhdr image does not contain any valid images");
+    snprintf(status.detail, sizeof status.detail,
+             "input uhdr image does not contain any valid images");
     return status;
   }
 

@@ -397,20 +397,23 @@ class JpegR {
    */
   status_t getJPEGRInfo(jr_compressed_ptr jpegr_image_ptr, jr_info_ptr jpegr_image_info_ptr);
 
-  /*!\brief This function receives iso block and / or xmp block and parses gainmap metadata and fill
-   * the output descriptor. If both iso block and xmp block are available, then iso block is
-   * preferred over xmp.
+  /*!\brief This function receives iso block and / or xmp + exif block and parses gainmap metadata
+   * and fill the output descriptor. If both iso block and xmp +exif block are available, then iso
+   * block is preferred over xmp. Exif can be useful with xmp for Apple gain maps:
+   * https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
    *
    * \param[in]       iso_data                  iso memory block
    * \param[in]       iso_size                  iso block size
    * \param[in]       xmp_data                  xmp memory block
    * \param[in]       xmp_size                  xmp block size
+   * \param[in]       exif_data                 exif memory block
+   * \param[in]       exif_size                 exif block size
    * \param[in, out]  gainmap_metadata          gainmap metadata descriptor
    *
    * \return uhdr_error_info_t #UHDR_CODEC_OK if operation succeeds, uhdr_codec_err_t otherwise.
    */
   uhdr_error_info_t parseGainMapMetadata(uint8_t* iso_data, size_t iso_size, uint8_t* xmp_data,
-                                         size_t xmp_size,
+                                         size_t xmp_size, uint8_t* exif_data, int exif_size,
                                          uhdr_gainmap_metadata_ext_t* uhdr_metadata);
 
   /*!\brief This method is used to tone map a hdr image

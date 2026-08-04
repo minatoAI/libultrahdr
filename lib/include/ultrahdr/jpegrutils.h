@@ -13,6 +13,18 @@
 
 #include "ultrahdr/jpegr.h"
 
+#if (defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && \
+     __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) ||                  \
+    defined(_WIN32) || defined(_WIN64)
+#define UHDR_HOST_BIG_ENDIAN false
+#elif (defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+       __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__) ||                  \
+    defined(__BIG_ENDIAN__)
+#define UHDR_HOST_BIG_ENDIAN true
+#else
+#error "Unable to detect endianness."
+#endif
+
 // TODO (dichenzhang): This is old version metadata, new version can be found in
 // https://drive.google.com/file/d/1yUGmjGytRuBa2vpr9eM5Uu8CVhyyddjp/view?resourcekey=0-HGzFrzPQzu5FNYLRAJXQBA
 // and in gainmapmetadata.h/.cpp
@@ -66,11 +78,13 @@ uhdr_error_info_t Write(uhdr_compressed_image_t* destination, const void* source
  *
  * @param xmp_data pointer to XMP packet
  * @param xmp_size size of XMP packet
+ * @param exif_data pointer to EXIF packet
+ * @param exif_size size of EXIF packet
  * @param metadata place to store HDR metadata values
  * @return success or error code.
  */
-uhdr_error_info_t getMetadataFromXMP(uint8_t* xmp_data, size_t xmp_size,
-                                     uhdr_gainmap_metadata_ext_t* metadata);
+uhdr_error_info_t getMetadataFromXMP(uint8_t* xmp_data, size_t xmp_size, uint8_t* exif_data,
+                                     int exif_size, uhdr_gainmap_metadata_ext_t* metadata);
 
 /*
  * This method generates XMP metadata for the primary image.

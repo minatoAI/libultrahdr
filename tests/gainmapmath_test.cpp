@@ -12,6 +12,9 @@
 #include <gmock/gmock.h>
 
 #include "ultrahdr/gainmapmath.h"
+#ifdef UHDR_ENABLE_SMPTE2094_50
+#include "smpte2094_50/smpte2094_50.h"
+#endif
 
 namespace ultrahdr {
 
@@ -1426,6 +1429,16 @@ TEST_F(GainMapMathTest, GetP010Pixel) {
   for (size_t y = 0; y < 4; ++y) {
     for (size_t x = 0; x < 4; ++x) {
       EXPECT_YUV_NEAR(getP010Pixel(&image, x, y), colors[y][x]);
+    }
+  }
+}
+
+TEST_F(GainMapMathTest, GetP010PixelOddWidth) {
+  auto image = P010Image();
+  image.w = 3;
+  for (size_t y = 0; y < 4; ++y) {
+    for (size_t x = 0; x < 3; ++x) {
+      EXPECT_NO_FATAL_FAILURE(getP010Pixel(&image, x, y));
     }
   }
 }
